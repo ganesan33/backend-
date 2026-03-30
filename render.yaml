@@ -48,6 +48,10 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
       - key: MAX_THUMBNAIL_UPLOAD_MB
         value: 5
       - key: MAX_VIDEO_UPLOAD_MB

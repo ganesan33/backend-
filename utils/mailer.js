@@ -1,5 +1,16 @@
 const nodemailer = require('nodemailer');
 
+function getResendConfig() {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER;
+
+  return {
+    apiKey,
+    from,
+    isConfigured: Boolean(apiKey && from)
+  };
+}
+
 function getMailConfig() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = Number(process.env.SMTP_PORT || 587);
@@ -64,6 +75,14 @@ function buildGmailSslFallbackTransporter(config) {
 }
 
 async function verifyMailTransport() {
+  const resendConfig = getResendConfig();
+  if (resendConfig.isConfigured) {
+    return {
+      ok: true,
+      reason: 'Resend API configured (HTTPS mail delivery enabled)'
+    };
+  }
+
   const config = getMailConfig();
   const transporter = buildTransporter();
 
@@ -88,7 +107,46 @@ async function verifyMailTransport() {
   }
 }
 
+async function sendEmailViaResend({ to, subject, html, text }) {
+  const resendConfig = getResendConfig();
+  if (!resendConfig.isConfigured) {
+    throw new Error('Resend is not configured. Set RESEND_API_KEY and RESEND_FROM.');
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendConfig.apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: resendConfig.from,
+      to: [to],
+      subject,
+      html,
+      text
+    })
+  });
+
+  if (!response.ok) {
+    let errorText = '';
+    try {
+      errorText = await response.text();
+    } catch (_) {
+      errorText = '';
+    }
+    throw new Error(`Resend API error (${response.status}): ${errorText || 'Unknown error'}`);
+  }
+
+  return response.json();
+}
+
 async function sendEmail({ to, subject, html, text }) {
+  const resendConfig = getResendConfig();
+  if (resendConfig.isConfigured) {
+    return sendEmailViaResend({ to, subject, html, text });
+  }
+
   const config = getMailConfig();
   const transporter = buildTransporter();
 
@@ -129,6 +187,7 @@ async function sendEmail({ to, subject, html, text }) {
 }
 
 module.exports = {
+  getResendConfig,
   getMailConfig,
   sendEmail,
   verifyMailTransport
