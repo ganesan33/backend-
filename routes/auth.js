@@ -39,7 +39,7 @@ function generateOneTimeToken() {
 
 async function trySendEmail(emailPayload) {
   try {
-    const timeoutMs = Number(process.env.SMTP_SEND_TIMEOUT_MS || 7000);
+    const timeoutMs = Number(process.env.SMTP_SEND_TIMEOUT_MS || 20000);
     const result = await Promise.race([
       sendEmail(emailPayload),
       new Promise((_, reject) => {
