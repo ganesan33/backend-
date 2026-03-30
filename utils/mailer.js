@@ -5,7 +5,7 @@ function getMailConfig() {
   const port = Number(process.env.SMTP_PORT || 587);
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM || 'EduFlow <no-reply@example.com>';
+  const from = process.env.SMTP_FROM || user || 'EduFlow <no-reply@example.com>';
 
   return {
     host,
@@ -28,6 +28,9 @@ function buildTransporter() {
     host: config.host,
     port: config.port,
     secure: config.port === 465,
+    connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 10000),
+    greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 10000),
+    socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 15000),
     auth: {
       user: config.user,
       pass: config.pass
