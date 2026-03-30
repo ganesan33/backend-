@@ -205,7 +205,7 @@ router.post('/signup', async (req, res) => {
       success: true,
       message: emailSent
         ? 'Signup successful. Verification email sent. Please check inbox, spam, or promotions.'
-        : 'Signup successful. Verification email could not be sent right now. Please use resend verification after SMTP is available.'
+        : 'Signup successful. Verification email could not be sent right now. Please request a new verification code once SMTP is available.'
     });
   } catch (error) {
     console.error('Signup error:', error);
