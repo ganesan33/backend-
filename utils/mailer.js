@@ -38,6 +38,31 @@ function buildTransporter() {
   });
 }
 
+async function verifyMailTransport() {
+  const config = getMailConfig();
+  const transporter = buildTransporter();
+
+  if (!transporter) {
+    return {
+      ok: false,
+      reason: 'SMTP is not configured (missing SMTP_USER/SMTP_PASS).'
+    };
+  }
+
+  try {
+    await transporter.verify();
+    return {
+      ok: true,
+      reason: `SMTP ready (${config.host}:${config.port})`
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error?.message || 'SMTP verification failed'
+    };
+  }
+}
+
 async function sendEmail({ to, subject, html, text }) {
   const config = getMailConfig();
   const transporter = buildTransporter();
@@ -64,5 +89,6 @@ async function sendEmail({ to, subject, html, text }) {
 
 module.exports = {
   getMailConfig,
-  sendEmail
+  sendEmail,
+  verifyMailTransport
 };

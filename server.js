@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth');
 const courseRoutes = require('./routes/courses');
 const adminRoutes = require('./routes/admin');
 const instructorRequestRoutes = require('./routes/instructorRequests');
+const { verifyMailTransport } = require('./utils/mailer');
 
 const app = express();
 
@@ -49,4 +50,17 @@ app.use('/api/instructor-requests', instructorRequestRoutes);
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
+
+  // Non-blocking startup check so production logs show SMTP readiness/errors.
+  verifyMailTransport()
+    .then((result) => {
+      if (result.ok) {
+        console.log(`[MAIL] ${result.reason}`);
+      } else {
+        console.warn(`[MAIL] ${result.reason}`);
+      }
+    })
+    .catch((error) => {
+      console.warn(`[MAIL] SMTP verification check failed: ${error?.message || error}`);
+    });
 });
