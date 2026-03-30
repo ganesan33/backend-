@@ -1,0 +1,92 @@
+services:
+  - type: redis
+    name: eduflow-redis
+    ipAllowList: []
+
+  - type: web
+    name: eduflow-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: FRONTEND_URL
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: AZURE_STORAGE_CONNECTION_STRING
+        sync: false
+      - key: AZURE_STORAGE_CONTAINER
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: eduflow-redis
+          property: connectionString
+      - key: APP_BASE_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: MAX_THUMBNAIL_UPLOAD_MB
+        value: 5
+      - key: MAX_VIDEO_UPLOAD_MB
+        value: 300
+      - key: VIDEO_TRANSCODE_ENABLED
+        value: "false"
+      - key: VIDEO_TRANSCODE_PRESET
+        value: veryfast
+      - key: VIDEO_TRANSCODE_CRF
+        value: 23
+      - key: VIDEO_AUDIO_BITRATE
+        value: 128k
+
+  - type: worker
+    name: eduflow-transcode-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node worker.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: AZURE_STORAGE_CONNECTION_STRING
+        sync: false
+      - key: AZURE_STORAGE_CONTAINER
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: eduflow-redis
+          property: connectionString
+      - key: VIDEO_TRANSCODE_ENABLED
+        value: "true"
+      - key: VIDEO_TRANSCODE_PRESET
+        value: veryfast
+      - key: VIDEO_TRANSCODE_CRF
+        value: 23
+      - key: VIDEO_AUDIO_BITRATE
+        value: 128k

@@ -1,0 +1,21 @@
+name: Render Deploy
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  trigger-render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Hook
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: No Deploy Hook Configured
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL == '' }}
+        run: echo "RENDER_DEPLOY_HOOK_URL is not set; skipping manual trigger. Render autoDeploy can still deploy from git push."
