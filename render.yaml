@@ -1,10 +1,12 @@
 services:
   - type: redis
     name: eduflow-redis
+    plan: free
     ipAllowList: []
 
   - type: web
     name: eduflow-backend
+    plan: free
     env: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
@@ -54,36 +56,6 @@ services:
         value: 300
       - key: VIDEO_TRANSCODE_ENABLED
         value: "false"
-      - key: VIDEO_TRANSCODE_PRESET
-        value: veryfast
-      - key: VIDEO_TRANSCODE_CRF
-        value: 23
-      - key: VIDEO_AUDIO_BITRATE
-        value: 128k
-
-  - type: worker
-    name: eduflow-transcode-worker
-    env: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: node worker.js
-    autoDeploy: true
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: MONGO_URI
-        sync: false
-      - key: AZURE_STORAGE_CONNECTION_STRING
-        sync: false
-      - key: AZURE_STORAGE_CONTAINER
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: eduflow-redis
-          property: connectionString
-      - key: VIDEO_TRANSCODE_ENABLED
-        value: "true"
       - key: VIDEO_TRANSCODE_PRESET
         value: veryfast
       - key: VIDEO_TRANSCODE_CRF
