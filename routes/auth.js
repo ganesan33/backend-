@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { ensureAuth } = require('../middleware/auth');
-const { sendEmail } = require('../utils/mailer');
+const { sendEmailViaBrevo } = require('../utils/brevo_mailer');
 
 const router = express.Router();
 
@@ -39,18 +39,14 @@ function generateOneTimeToken() {
 
 async function trySendEmail(emailPayload) {
   try {
-    const timeoutMs = Number(process.env.SMTP_SEND_TIMEOUT_MS || 20000);
+    const timeoutMs = Number(process.env.BREVO_SEND_TIMEOUT_MS || 15000);
     const result = await Promise.race([
-      sendEmail(emailPayload),
+      sendEmailViaBrevo(emailPayload),
       new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Email send timeout')), timeoutMs);
       })
     ]);
-    const acceptedCount = Array.isArray(result.accepted) ? result.accepted.length : 0;
-    if (acceptedCount > 0) {
-      return true;
-    }
-    return false;
+    return true;
   } catch (error) {
     console.error('Email delivery error:', error.message || error);
     return false;

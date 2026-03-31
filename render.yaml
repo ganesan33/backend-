@@ -38,16 +38,12 @@ services:
           property: connectionString
       - key: APP_BASE_URL
         sync: false
-      - key: SMTP_HOST
+      - key: BREVO_API_KEY
         sync: false
-      - key: SMTP_PORT
+      - key: BREVO_FROM
         sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_FROM
-        sync: false
+      - key: BREVO_FROM_NAME
+        value: EduFlow
       - key: MAX_THUMBNAIL_UPLOAD_MB
         value: 5
       - key: MAX_VIDEO_UPLOAD_MB

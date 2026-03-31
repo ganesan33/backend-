@@ -12,7 +12,7 @@ const authRoutes = require('./routes/auth');
 const courseRoutes = require('./routes/courses');
 const adminRoutes = require('./routes/admin');
 const instructorRequestRoutes = require('./routes/instructorRequests');
-const { verifyMailTransport } = require('./utils/mailer');
+const { verifyBrevoMailer } = require('./utils/brevo_mailer');
 
 const app = express();
 
@@ -54,8 +54,8 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
 
-  // Non-blocking startup check so production logs show SMTP readiness/errors.
-  verifyMailTransport()
+  // Non-blocking startup check so production logs show Brevo readiness/errors.
+  verifyBrevoMailer()
     .then((result) => {
       if (result.ok) {
         console.log(`[MAIL] ${result.reason}`);
@@ -64,6 +64,6 @@ app.listen(PORT, () => {
       }
     })
     .catch((error) => {
-      console.warn(`[MAIL] SMTP verification check failed: ${error?.message || error}`);
+      console.warn(`[MAIL] Brevo verification check failed: ${error?.message || error}`);
     });
 });
