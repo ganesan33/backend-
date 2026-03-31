@@ -68,6 +68,10 @@ const courseSchema = new mongoose.Schema({
     enum: ['beginner', 'intermediate', 'advanced'],
     default: 'beginner'
   },
+  notesText: {
+    type: String,
+    default: ''
+  },
   thumbnailUrl: {
     type: String,
     required: true

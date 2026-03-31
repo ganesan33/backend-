@@ -1,7 +1,9 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const Course = require('../models/Course');
 const User = require('../models/User');
 const { ensureRole } = require('../middleware/auth');
+const { getLyzrConfig, sendTutorMessage } = require('../utils/lyzr_client');
 const {
   getOrCreateContainerClient,
   getStorageConfig,
@@ -11,6 +13,14 @@ const {
 const { enqueueVideoTranscodeJob } = require('../queues/videoTranscodeQueue');
 
 const router = express.Router();
+
+const tutorLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env.COURSE_TUTOR_RATE_LIMIT_PER_MIN || 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many tutor requests. Please try again shortly.' }
+});
 
 const MAX_THUMBNAIL_MB = Number(process.env.MAX_THUMBNAIL_UPLOAD_MB || 2);
 const MAX_VIDEO_MB = Number(process.env.MAX_VIDEO_UPLOAD_MB || 80);
@@ -117,7 +127,7 @@ router.post('/uploads/sas', ensureRole('instructor'), async (req, res) => {
 
 router.post('/publish/direct', ensureRole('instructor'), async (req, res) => {
   try {
-    const { title, category, level, thumbnailUrl, videos } = req.body;
+    const { title, category, level, notesText, thumbnailUrl, videos } = req.body;
 
     if (!title || !thumbnailUrl || !Array.isArray(videos) || videos.length === 0) {
       return res.status(400).json({
@@ -143,6 +153,7 @@ router.post('/publish/direct', ensureRole('instructor'), async (req, res) => {
       title: String(title).trim(),
       category: category || 'general',
       level: level || 'beginner',
+      notesText: String(notesText || '').trim(),
       thumbnailUrl,
       videos: mappedVideos,
       instructor: req.user.id
@@ -174,7 +185,7 @@ router.post('/', ensureRole('instructor'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'No thumbnail image uploaded' });
     }
 
-    const { title, category, level } = req.body;
+    const { title, category, level, notesText } = req.body;
     const thumbnail = req.files.thumbnail;
 
     if (thumbnail.size > MAX_THUMBNAIL_BYTES) {
@@ -245,6 +256,7 @@ router.post('/', ensureRole('instructor'), async (req, res) => {
       title,
       category: category || 'general',
       level: level || 'beginner',
+      notesText: String(notesText || '').trim(),
       thumbnailUrl: thumbnailBlobClient.url,
       videos,
       instructor: req.user.id
@@ -449,7 +461,7 @@ router.get('/enrolled', ensureRole('student'), async (req, res) => {
 
 router.patch('/:id', ensureRole('instructor'), async (req, res) => {
   try {
-    const { title, category, level, videos } = req.body;
+    const { title, category, level, notesText, videos } = req.body;
     const course = await Course.findById(req.params.id);
 
     if (!course) {
@@ -470,6 +482,10 @@ router.patch('/:id', ensureRole('instructor'), async (req, res) => {
 
     if (level && ['beginner', 'intermediate', 'advanced'].includes(level)) {
       course.level = level;
+    }
+
+    if (typeof notesText === 'string') {
+      course.notesText = notesText.trim();
     }
 
     if (Array.isArray(videos) && videos.length) {
@@ -494,6 +510,56 @@ router.patch('/:id', ensureRole('instructor'), async (req, res) => {
   } catch (error) {
     console.error('Course update error:', error);
     return res.status(500).json({ success: false, message: 'Failed to update course' });
+  }
+});
+
+router.post('/:courseId/tutor-chat', tutorLimiter, ensureRole('student', 'instructor', 'admin'), async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const message = String(req.body?.message || '').trim();
+    if (!message) {
+      return res.status(400).json({ success: false, message: 'message is required' });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('title notesText instructor studentsEnrolled')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Course not found' });
+    }
+
+    const isInstructor = String(course.instructor) === String(req.user.id);
+    const isEnrolled = (course.studentsEnrolled || []).some(
+      (studentId) => String(studentId) === String(req.user.id)
+    );
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isInstructor && !isEnrolled && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only enrolled students can use this tutor' });
+    }
+
+    const lyzrConfig = getLyzrConfig();
+    if (!lyzrConfig.enabled) {
+      return res.status(503).json({ success: false, message: 'Tutor is unavailable right now' });
+    }
+
+    const result = await sendTutorMessage({
+      userId: req.user.id,
+      userEmail: req.user.email,
+      courseId,
+      courseTitle: course.title,
+      notesText: course.notesText || '',
+      studentMessage: message
+    });
+
+    return res.json({
+      success: true,
+      reply: result.reply
+    });
+  } catch (error) {
+    console.error('Tutor chat error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to get tutor response' });
   }
 });
 
