@@ -67,8 +67,17 @@ async function sendTutorMessage({ userId, userEmail, courseId, courseTitle, note
   }
 
   const scopedPrompt = [
+    'You are an AI tutor for this course.',
+    'Rules:',
+    '- Answer only using the syllabus/notes scope below.',
+    '- If question is outside scope, reply exactly: "This question is outside the scope of this course."',
+    '- Keep answers concise and clear by default (short paragraph or 3-5 bullets).',
+    '- Give detailed explanation only when the student explicitly asks for detail.',
+    '- Do not start with meta phrases like "based on syllabus" or "according to notes".',
+    '- Output only the explanation.',
+    '',
     `Course title: ${courseTitle || 'Untitled course'}`,
-    'Instructor-provided scope:',
+    'Course scope (instructor notes):',
     notesText && notesText.trim() ? notesText.trim() : 'No notes provided by instructor.',
     '',
     'Student question:',
