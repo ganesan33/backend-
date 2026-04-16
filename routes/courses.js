@@ -242,8 +242,8 @@ router.post('/', ensureRole('instructor'), async (req, res) => {
             });
           }
 
-          const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
-          if (!allowedTypes.includes(videoFile.mimetype)) {
+          const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/*'];
+          if (!allowedTypes.includes(videoFile.mimetype) && !videoFile.mimetype.startsWith('video/')) {
             return res.status(400).json({
               success: false,
               message: 'Invalid file type. Only MP4, WebM or Ogg videos are allowed'
