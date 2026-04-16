@@ -216,4 +216,86 @@ router.delete('/courses/:id', ensureRole('admin'), async (req, res) => {
   }
 });
 
+// Get all users
+router.get('/users', ensureRole('admin'), async (req, res) => {
+  try {
+    const users = await User.find()
+      .select('email role createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.json({ success: true, users });
+  } catch (error) {
+    console.error('Get users error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load users' });
+  }
+});
+
+// Delete user
+router.delete('/users/:id', ensureRole('admin'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Prevent admin from deleting themselves
+    if (user._id.toString() === req.user.id) {
+      return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
+    }
+
+    // Delete user's courses if they're an instructor
+    if (user.role === 'instructor') {
+      const containerClient = getContainerClient();
+      const courses = await Course.find({ instructor: user._id });
+      
+      for (const course of courses) {
+        // Delete course media
+        if (containerClient && course.thumbnailUrl) {
+          const thumbnailBlobName = course.thumbnailUrl.split('/').pop();
+          try {
+            await containerClient.getBlockBlobClient(thumbnailBlobName).delete();
+          } catch (blobError) {
+            console.error('Thumbnail blob deletion error:', blobError);
+          }
+        }
+
+        for (const video of course.videos) {
+          if (containerClient && video.videoUrl) {
+            const videoBlobName = video.videoUrl.split('/').pop();
+            try {
+              await containerClient.getBlockBlobClient(videoBlobName).delete();
+            } catch (blobError) {
+              console.error('Video blob deletion error:', blobError);
+            }
+          }
+        }
+
+        for (const doc of course.documents || []) {
+          if (containerClient && doc.documentUrl) {
+            const docBlobName = doc.documentUrl.split('/').pop();
+            try {
+              await containerClient.getBlockBlobClient(docBlobName).delete();
+            } catch (blobError) {
+              console.error('Document blob deletion error:', blobError);
+            }
+          }
+        }
+      }
+
+      await Course.deleteMany({ instructor: user._id });
+    }
+
+    // Delete user's instructor request if any
+    await InstructorRequest.deleteMany({ user: user._id });
+
+    // Delete the user
+    await User.deleteOne({ _id: req.params.id });
+
+    return res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('User deletion error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete user' });
+  }
+});
+
 module.exports = router;
