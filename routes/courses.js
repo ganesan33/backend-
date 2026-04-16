@@ -641,7 +641,7 @@ router.post('/:courseId/tutor-chat', tutorLimiter, ensureRole('student', 'instru
     });
   } catch (error) {
     console.error('Tutor chat error:', error);
-    return res.status(500).json({ success: false, message: 'Failed to get tutor response' });
+    return res.status(500).json({ success: false, message: error.message || 'Failed to get tutor response' });
   }
 });
 
