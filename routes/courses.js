@@ -48,6 +48,12 @@ function withSignedMedia(course) {
         sourceVideoUrl: signBlobReadUrl(video.sourceVideoUrl || video.videoUrl),
         videoUrl: signBlobReadUrl(video.videoUrl)
       })),
+    documents: (plainCourse.documents || [])
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map((doc) => ({
+        ...doc,
+        documentUrl: signBlobReadUrl(doc.documentUrl)
+      })),
     thumbnailUrl: signBlobReadUrl(plainCourse.thumbnailUrl),
     reviews: (plainCourse.reviews || []).map((review) => ({
       ...review,
@@ -106,7 +112,8 @@ router.post('/uploads/sas', ensureRole('instructor'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'fileName is required' });
     }
 
-    const folder = kind === 'thumbnail' ? 'thumbnails' : 'videos';
+    const folderMap = { thumbnail: 'thumbnails', video: 'videos', document: 'documents' };
+    const folder = folderMap[kind] || 'videos';
     const blobName = `${folder}/${Date.now()}-${normalizeFilename(fileName)}`;
     const sas = createBlobUploadSasUrl(blobName, { expiryMinutes: 60 });
 
@@ -127,12 +134,12 @@ router.post('/uploads/sas', ensureRole('instructor'), async (req, res) => {
 
 router.post('/publish/direct', ensureRole('instructor'), async (req, res) => {
   try {
-    const { title, category, level, notesText, thumbnailUrl, videos } = req.body;
+    const { title, company, round, category, level, notesText, thumbnailUrl, videos, documents } = req.body;
 
-    if (!title || !thumbnailUrl || !Array.isArray(videos) || videos.length === 0) {
+    if (!title || !thumbnailUrl || !company || !round || !Array.isArray(videos) || videos.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'title, thumbnailUrl and at least one video are required'
+        message: 'title, company, round, thumbnailUrl and at least one video are required'
       });
     }
 
@@ -149,13 +156,23 @@ router.post('/publish/direct', ensureRole('instructor'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'At least one valid video URL is required' });
     }
 
+    const mappedDocuments = (Array.isArray(documents) ? documents : []).map((doc, index) => ({
+      title: String(doc.title || `Document ${index + 1}`).trim(),
+      documentUrl: String(doc.documentUrl || '').trim(),
+      documentType: String(doc.documentType || 'pdf').trim(),
+      order: index
+    })).filter((doc) => doc.documentUrl);
+
     const newCourse = new Course({
       title: String(title).trim(),
+      company: String(company).trim(),
+      round: String(round).trim(),
       category: category || 'general',
       level: level || 'beginner',
       notesText: String(notesText || '').trim(),
       thumbnailUrl,
       videos: mappedVideos,
+      documents: mappedDocuments,
       instructor: req.user.id
     });
 
@@ -185,8 +202,15 @@ router.post('/', ensureRole('instructor'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'No thumbnail image uploaded' });
     }
 
-    const { title, category, level, notesText } = req.body;
+    const { title, company, round, category, level, notesText } = req.body;
     const thumbnail = req.files.thumbnail;
+
+    if (!company || !round) {
+      return res.status(400).json({
+        success: false,
+        message: 'company and round are required'
+      });
+    }
 
     if (thumbnail.size > MAX_THUMBNAIL_BYTES) {
       return res.status(400).json({
@@ -252,13 +276,46 @@ router.post('/', ensureRole('instructor'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'At least one video is required' });
     }
 
+    // Handle document file uploads
+    const documents = [];
+    for (const [key, value] of Object.entries(req.files)) {
+      if (key.startsWith('documents[')) {
+        const match = key.match(/documents\[(\d+)\]\[file\]/);
+        if (match) {
+          const index = match[1];
+          const docTitle = req.body[`documents[${index}][title]`];
+          const docFile = value;
+
+          const docBlobName = `documents/document-${Date.now()}-${normalizeFilename(docFile.name)}`;
+          const docBlobClient = containerClient.getBlockBlobClient(docBlobName);
+
+          await docBlobClient.uploadData(docFile.data, {
+            blobHTTPHeaders: { blobContentType: docFile.mimetype }
+          });
+
+          const ext = (docFile.name || '').split('.').pop().toLowerCase();
+          const typeMap = { pdf: 'pdf', ppt: 'ppt', pptx: 'pptx', doc: 'doc', docx: 'docx' };
+
+          documents.push({
+            title: docTitle || docFile.name,
+            documentUrl: docBlobClient.url,
+            documentType: typeMap[ext] || 'other',
+            order: documents.length
+          });
+        }
+      }
+    }
+
     const newCourse = new Course({
       title,
+      company,
+      round,
       category: category || 'general',
       level: level || 'beginner',
       notesText: String(notesText || '').trim(),
       thumbnailUrl: thumbnailBlobClient.url,
       videos,
+      documents,
       instructor: req.user.id
     });
 
@@ -278,6 +335,8 @@ router.get('/', async (req, res) => {
       q = '',
       category,
       level,
+      company,
+      round,
       minRating,
       sort = 'newest'
     } = req.query;
@@ -289,6 +348,14 @@ router.get('/', async (req, res) => {
         { title: { $regex: q, $options: 'i' } },
         { category: { $regex: q, $options: 'i' } }
       ];
+    }
+
+    if (company && company !== 'all') {
+      filter.company = company;
+    }
+
+    if (round && round !== 'all') {
+      filter.round = round;
     }
 
     if (category && category !== 'all') {
@@ -461,7 +528,7 @@ router.get('/enrolled', ensureRole('student'), async (req, res) => {
 
 router.patch('/:id', ensureRole('instructor'), async (req, res) => {
   try {
-    const { title, category, level, notesText, videos } = req.body;
+    const { title, company, round, category, level, notesText, videos, documents } = req.body;
     const course = await Course.findById(req.params.id);
 
     if (!course) {
@@ -476,6 +543,14 @@ router.patch('/:id', ensureRole('instructor'), async (req, res) => {
       course.title = title.trim();
     }
 
+    if (company && ['tcs', 'cognizant', 'infosys_finacle', 'embedur'].includes(company)) {
+      course.company = company;
+    }
+
+    if (round && round.trim()) {
+      course.round = round.trim();
+    }
+
     if (category && category.trim()) {
       course.category = category.trim();
     }
@@ -486,6 +561,13 @@ router.patch('/:id', ensureRole('instructor'), async (req, res) => {
 
     if (typeof notesText === 'string') {
       course.notesText = notesText.trim();
+    }
+
+    if (Array.isArray(documents)) {
+      course.documents = documents.map((doc, index) => ({
+        ...doc,
+        order: index
+      }));
     }
 
     if (Array.isArray(videos) && videos.length) {

@@ -28,6 +28,26 @@ const videoSchema = new mongoose.Schema({
   }
 });
 
+const documentSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true
+  },
+  documentUrl: {
+    type: String,
+    required: true
+  },
+  documentType: {
+    type: String,
+    enum: ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'other'],
+    default: 'pdf'
+  },
+  order: {
+    type: Number,
+    default: 0
+  }
+});
+
 const reviewSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -59,6 +79,15 @@ const courseSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  company: {
+    type: String,
+    enum: ['tcs', 'cognizant', 'infosys_finacle', 'embedur'],
+    required: true
+  },
+  round: {
+    type: String,
+    required: true
+  },
   category: {
     type: String,
     default: 'general'
@@ -77,6 +106,7 @@ const courseSchema = new mongoose.Schema({
     required: true
   },
   videos: [videoSchema],
+  documents: [documentSchema],
   instructor: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

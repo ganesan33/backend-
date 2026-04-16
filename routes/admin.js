@@ -18,6 +18,10 @@ function withSignedMedia(course) {
       ...video,
       sourceVideoUrl: signBlobReadUrl(video.sourceVideoUrl || video.videoUrl),
       videoUrl: signBlobReadUrl(video.videoUrl)
+    })),
+    documents: (plainCourse.documents || []).map((doc) => ({
+      ...doc,
+      documentUrl: signBlobReadUrl(doc.documentUrl)
     }))
   };
 }
@@ -191,6 +195,19 @@ router.delete('/courses/:id', ensureRole('admin'), async (req, res) => {
     }
 
     await Course.deleteOne({ _id: req.params.id });
+
+    // Delete document blobs
+    for (const doc of course.documents || []) {
+      if (!containerClient || !doc.documentUrl) {
+        continue;
+      }
+      const docBlobName = doc.documentUrl.split('/').pop();
+      try {
+        await containerClient.getBlockBlobClient(docBlobName).delete();
+      } catch (blobError) {
+        console.error('Document blob deletion error:', blobError);
+      }
+    }
 
     return res.json({ success: true });
   } catch (error) {
