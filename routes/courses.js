@@ -186,6 +186,38 @@ router.post('/publish/direct', ensureRole('instructor'), async (req, res) => {
   }
 });
 
+// Update course endpoint
+router.put('/:id', ensureRole('instructor'), async (req, res) => {
+  try {
+    const { title, company, round, category, level, notesText } = req.body;
+    
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Course not found' });
+    }
+
+    // Verify instructor owns this course
+    if (course.instructor.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Not authorized to edit this course' });
+    }
+
+    // Update basic fields
+    if (title) course.title = String(title).trim();
+    if (company) course.company = String(company).trim();
+    if (round) course.round = String(round).trim();
+    if (category) course.category = category;
+    if (level) course.level = level;
+    if (notesText !== undefined) course.notesText = String(notesText).trim();
+
+    await course.save();
+
+    return res.json({ success: true, course: withSignedMedia(course) });
+  } catch (error) {
+    console.error('Course update error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update course' });
+  }
+});
+
 router.post('/', ensureRole('instructor'), async (req, res) => {
   try {
     const { isConfigured } = getStorageConfig();
